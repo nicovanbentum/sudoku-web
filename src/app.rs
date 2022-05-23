@@ -1,4 +1,7 @@
-use eframe::{egui, epi};
+use eframe::{egui::{self, TextBuffer}, epi};
+
+mod parser;
+use parser::*;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
@@ -6,10 +9,17 @@ use eframe::{egui, epi};
 pub struct TemplateApp {
     // Example stuff:
     label: String,
+    code: String,
 
     // this how you opt-out of serialization of a member
     #[cfg_attr(feature = "persistence", serde(skip))]
     value: f32,
+
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    lexer: parser::Lexer,
+
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    parser: parser::Parser
 }
 
 impl Default for TemplateApp {
@@ -17,7 +27,10 @@ impl Default for TemplateApp {
         Self {
             // Example stuff:
             label: "Hello World!".to_owned(),
+            code: "".to_owned(),
             value: 2.7,
+            lexer: Lexer::new(),
+            parser: Parser::new()
         }
     }
 }
@@ -52,7 +65,7 @@ impl epi::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
-        let Self { label, value } = self;
+        let Self { label, code, value, lexer, parser } = self;
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -70,17 +83,13 @@ impl epi::App for TemplateApp {
             });
         });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
+        egui::SidePanel::right("side_panel").show(ctx, |ui| {
+            ui.heading("Explorer");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(label);
-            });
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                *value += 1.0;
+            if ui.button("Compile").clicked() {
+                lexer.load_file(code);
+                lexer.print_tokens();
+                parser.parse(&lexer);
             }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -97,12 +106,8 @@ impl epi::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            ui.heading("eframe template");
-            ui.hyperlink("https://github.com/emilk/eframe_template");
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
+            ui.heading("Code Editor");
+            ui.add(egui::TextEdit::multiline(code).code_editor());
             egui::warn_if_debug_build(ui);
         });
 
